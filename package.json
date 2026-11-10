@@ -1,0 +1,44 @@
+{
+  "name": "dsh-github-trending-masonry",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "GitHub Trending in a flat masonry card panel: period tabs, category chips, quick star (GitHub account or local list) and a persistent cache for instant reopen.",
+  "license": "MIT",
+  "author": "wei.zhang",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zhang-Eli/dsh-github-trending-masonry.git"
+  },
+  "homepage": "https://github.com/Zhang-Eli/dsh-github-trending-masonry#readme",
+  "bugs": {
+    "url": "https://github.com/Zhang-Eli/dsh-github-trending-masonry/issues"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "lib/",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg",
+    "README.md",
+    "README.zh.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

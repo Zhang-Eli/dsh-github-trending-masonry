@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "GitHub Trending",
+    "description": "Browse GitHub Trending daily/weekly/monthly boards as flat masonry cards with category chips, one-click starring (GitHub account or a local-only list) and a persistent cache that makes reopening fast."
+  },
+  "nav": {
+    "title": "GitHub Trending"
+  }
+}

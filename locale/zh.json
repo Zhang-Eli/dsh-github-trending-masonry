@@ -1,0 +1,9 @@
+{
+  "meta": {
+    "title": "GitHub Trending",
+    "description": "以扁平卡片瀑布流展示 GitHub Trending 日榜/周榜/月榜，支持分类筛选、点击星标收藏（可连接 GitHub 账户，也可仅保存在本地清单），并带有持久缓存让再次打开更快。"
+  },
+  "nav": {
+    "title": "GitHub Trending"
+  }
+}
