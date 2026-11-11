@@ -35,6 +35,11 @@ window.__ModuleLoader__.load({
     const MAX_STACK = 5
     const MAX_FEATURES = 4
     const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=public_repo&description=DSH%20Trending%20Masonry'
+    // Author / feedback links shown at the foot of the panel.
+    const REPO_URL = 'https://github.com/Zhang-Eli/dsh-github-trending-masonry'
+    const ISSUES_URL = REPO_URL + '/issues'
+    const AUTHOR_NAME = 'Zhang-Eli'
+    const AUTHOR_URL = 'https://github.com/' + AUTHOR_NAME
 
     /** Filled in apply(); the slot components are rendered by the shell, not by us. */
     let LOCALE = null
@@ -93,6 +98,8 @@ window.__ModuleLoader__.load({
       'account.disconnectFailed': '断开连接失败',
       'state.failed': '账户状态加载失败',
       'notice.dismiss': '关闭提示',
+      'feedback': '反馈问题',
+      'developedBy': 'Developed by',
     }
 
     const EN = {
@@ -149,6 +156,8 @@ window.__ModuleLoader__.load({
       'account.disconnectFailed': 'Failed to disconnect',
       'state.failed': 'Failed to load the account state',
       'notice.dismiss': 'Dismiss',
+      'feedback': 'Feedback',
+      'developedBy': 'Developed by',
     }
 
     /* ------------------------------------------------------------------ */
@@ -628,6 +637,28 @@ window.__ModuleLoader__.load({
           strokeWidth: filled ? 1 : 1.6,
           strokeLinecap: 'round',
           strokeLinejoin: 'round',
+        }),
+      )
+    }
+
+    /** Small speech-bubble icon matching the footer's "feedback" link. */
+    function FeedbackIcon(props) {
+      const size = (props && props.size) || 13
+      return h(
+        'svg',
+        {
+          width: size,
+          height: size,
+          viewBox: '0 0 24 24',
+          fill: 'none',
+          stroke: 'currentColor',
+          strokeWidth: 1.6,
+          strokeLinecap: 'round',
+          strokeLinejoin: 'round',
+          'aria-hidden': 'true',
+        },
+        h('path', {
+          d: 'M13.2 8c0 2.5-2.3 4.5-5.2 4.5-.7 0-1.3-.1-1.9-.3l-2.9 1 .9-2.4c-.7-.7-1.2-1.7-1.2-2.8 0-2.5 2.3-4.5 5.1-4.5s5.2 2 5.2 4.5Z',
         }),
       )
     }
@@ -1247,8 +1278,71 @@ window.__ModuleLoader__.load({
       '.gtm-link{font-size:11.5px;color:var(--dsw-alias-brand-primary);text-decoration:none}',
       '.gtm-link:hover{text-decoration:underline}',
       '.gtm-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;flex-wrap:wrap}',
+      '.gtm-foot{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:2px;padding:10px 2px 0;border-top:1px solid var(--dsw-alias-border-l1);font-size:12px;color:var(--dsw-alias-label-secondary)}',
+      '.gtm-foot-link{display:inline-flex;align-items:center;gap:5px;color:var(--dsw-alias-label-secondary);text-decoration:none;padding:1px 0;border-radius:4px}',
+      '.gtm-foot-link:hover,.gtm-foot-link:focus-visible{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px;outline:none}',
+      '.gtm-foot-dev{display:inline-flex;align-items:center;gap:5px;margin-left:auto;font-size:12px;color:var(--dsw-alias-label-secondary)}',
+      '.gtm-foot-dev-label{font-style:italic}',
+      '.gtm-foot-avatar{width:16px;height:16px;border-radius:50%;object-fit:cover;background:var(--dsw-alias-bg-layer-2);flex:none}',
+      '.gtm-foot-name{color:var(--dsw-alias-label-secondary);text-decoration:none}',
+      '.gtm-foot-name:hover,.gtm-foot-name:focus-visible{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px;outline:none}',
       '@media (max-width:760px){.gtm-root{padding:14px 12px 40px}.gtm-head-actions{justify-content:flex-start}}',
     ].join('\n')
+
+    /* ------------------------------------------------------------------ */
+    /* Footer                                                              */
+    /* ------------------------------------------------------------------ */
+
+    /** Feedback link + author credit, mirrored from the One Pack panel footer. */
+    function PanelFooter(props) {
+      const t = props.t
+      return h(
+        'footer',
+        { className: 'gtm-foot' },
+        h(
+          'a',
+          {
+            className: 'gtm-foot-link',
+            href: ISSUES_URL,
+            target: '_blank',
+            rel: 'noreferrer noopener',
+            title: t('feedback') + ' · ' + ISSUES_URL,
+            'aria-label': t('feedback') + ' · ' + ISSUES_URL,
+          },
+          h(FeedbackIcon, { size: 13 }),
+          t('feedback'),
+        ),
+        h(
+          'span',
+          { className: 'gtm-foot-dev' },
+          h('span', { className: 'gtm-foot-dev-label' }, t('developedBy')),
+          h('img', {
+            className: 'gtm-foot-avatar',
+            src: 'https://github.com/' + AUTHOR_NAME + '.png?size=32',
+            alt: '',
+            width: 16,
+            height: 16,
+            loading: 'lazy',
+            draggable: false,
+            onError: function (event) {
+              event.currentTarget.style.display = 'none'
+            },
+          }),
+          h(
+            'a',
+            {
+              className: 'gtm-foot-name',
+              href: AUTHOR_URL,
+              target: '_blank',
+              rel: 'noreferrer noopener',
+              title: AUTHOR_NAME + ' · ' + AUTHOR_URL,
+              'aria-label': AUTHOR_NAME + ' · ' + AUTHOR_URL,
+            },
+            AUTHOR_NAME,
+          ),
+        ),
+      )
+    }
 
     /* ------------------------------------------------------------------ */
     /* Panel                                                               */
@@ -1688,6 +1782,8 @@ window.__ModuleLoader__.load({
       } else {
         children.push(h(Masonry, { key: 'feed', items: filtered, renderItem: renderFeedCard }))
       }
+
+      children.push(h(PanelFooter, { key: 'footer', t: t }))
 
       return h(
         'div',
