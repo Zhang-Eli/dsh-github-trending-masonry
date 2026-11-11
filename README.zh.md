@@ -4,6 +4,8 @@
 
 用瀑布流浏览 GitHub Trending 的 日/周/月 榜单，支持一键Star并同步到GitHub。
 
+![DSH 侧栏中的 GitHub Trending 面板](assets/screenshot-1.png)
+
 ## 功能
 
 - **日榜 / 周榜 / 月榜**：GitHub Trending 三个时间维度的热门仓库，切换标签即可对照趋势。

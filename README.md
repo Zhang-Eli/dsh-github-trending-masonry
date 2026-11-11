@@ -4,6 +4,8 @@
 
 Browse GitHub Trending's daily, weekly and monthly boards in a masonry layout, with one-click starring that syncs to GitHub.
 
+![The GitHub Trending panel in the DSH sidebar](assets/screenshot-1.png)
+
 ## What it does
 
 - **Daily / weekly / monthly boards**: GitHub Trending's three time windows, one tab switch apart.
