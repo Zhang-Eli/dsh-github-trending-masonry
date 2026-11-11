@@ -77,6 +77,54 @@ function sendError(res, status, message, code) {
   sendJson(res, status, { error: message, code: code ?? 'error' })
 }
 
+/**
+ * Same-origin / loopback fence for every HTTP route. The connection service is
+ * authoritative when present (`connection.requestRejection`); otherwise fall
+ * back to the checks the harness itself applies to local routes, so a page on
+ * another origin can never reach these handlers. Returns undefined when the
+ * request may proceed, or the HTTP status of the refusal.
+ */
+function refusalOf(ctx, req) {
+  const connection = safeGet(ctx, 'connection')
+  if (connection && typeof connection.requestRejection === 'function') {
+    try {
+      const rejected = connection.requestRejection(req)
+      if (rejected !== undefined) return rejected
+    } catch {
+      /* fall through to the local checks below */
+    }
+  }
+  if (!isLoopbackPeer(req.socket?.remoteAddress)) return 403
+  const host = req.headers.host
+  if (host !== undefined) {
+    if (!URL.canParse(`http://${host}`)) return 403
+    const name = new URL(`http://${host}`).hostname
+    if (name !== 'localhost' && name !== '[::1]' && !/^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(name)) return 403
+  }
+  const site = req.headers['sec-fetch-site']
+  if (site !== undefined && site !== 'same-origin' && site !== 'none') return 403
+  const origin = req.headers.origin
+  if (origin === undefined) return undefined
+  if (!URL.canParse(origin)) return 403
+  return new URL(origin).host === host ? undefined : 403
+}
+
+function isLoopbackPeer(address) {
+  if (address === undefined) return false
+  const plain = String(address).startsWith('::ffff:') ? String(address).slice('::ffff:'.length) : String(address)
+  return plain === '::1' || /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(plain)
+}
+
+function isJsonRequest(req) {
+  const type = String(req.headers['content-type'] ?? '').split(';')[0].trim().toLowerCase()
+  return type === 'application/json'
+}
+
+function methodNotAllowed(res, allow) {
+  res.setHeader('allow', allow)
+  sendError(res, 405, `method not allowed; expected ${allow}`, 'method')
+}
+
 function queryOf(req) {
   try {
     const url = new URL(String(req.url ?? '/'), 'http://localhost')
@@ -91,6 +139,14 @@ function queryOf(req) {
 }
 
 function readJsonBody(req) {
+  // Local handlers embed a user PAT, so only well-formed JSON requests are
+  // accepted: a cross-site HTML form or text/plain fetch cannot be mistaken
+  // for an authenticated action.
+  if (!isJsonRequest(req)) {
+    const error = new Error('content-type must be application/json')
+    error.status = 415
+    return Promise.reject(error)
+  }
   return new Promise((resolve, reject) => {
     const chunks = []
     let size = 0
@@ -174,7 +230,8 @@ export function apply(ctx, config = {}) {
     return safeGet(ctx, 'credentials')
   }
 
-  async function resolveToken() {
+  async function resolveToken(options = {}) {
+    const allowEnv = options.env !== false
     const creds = credentials()
     if (creds && typeof creds.readRecord === 'function') {
       try {
@@ -187,6 +244,10 @@ export function apply(ctx, config = {}) {
     const stored = await store.token()
     if (stored) return stored
     if (fixedToken) return fixedToken
+    // Ambient environment tokens are for read-only enrichment (README fetch and
+    // rate-limit relief). They must never authorize a mutating call: a local
+    // page could otherwise star repos on behalf of a CI token.
+    if (!allowEnv) return null
     return process.env.GITHUB_TOKEN || process.env.GH_TOKEN || null
   }
 
@@ -217,7 +278,7 @@ export function apply(ctx, config = {}) {
   }
 
   async function accountView() {
-    const token = await resolveToken()
+    const token = await resolveToken({ env: false })
     if (!token) return { configured: false, login: null, avatarUrl: null }
     let meta = await store.account()
     if (!meta) {
@@ -287,6 +348,7 @@ export function apply(ctx, config = {}) {
   }
 
   async function handleFeed(req, res) {
+    if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
     const query = queryOf(req)
     const since = normalizeSince(query.since)
     const lang = normalizeLang(query.lang)
@@ -305,10 +367,12 @@ export function apply(ctx, config = {}) {
   }
 
   async function handleState(req, res) {
+    if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
     sendJson(res, 200, await statePayload())
   }
 
   async function handleHealth(req, res) {
+    if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
     sendJson(res, 200, {
       ok: true,
       version: '1.3.0',
@@ -338,6 +402,7 @@ export function apply(ctx, config = {}) {
   }
 
   async function handleStar(req, res) {
+    if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
     let body
     try {
       body = await readJsonBody(req)
@@ -353,7 +418,9 @@ export function apply(ctx, config = {}) {
     const action = body.action === 'unstar' ? 'unstar' : 'star'
     const repoInput = sanitizeRepoInput(body.repo)
     const existing = await store.starEntry(fullName)
-    const token = await resolveToken()
+    // Mutations never fall back to an ambient token: only a token the user
+    // explicitly connected (or configured) may star on their behalf.
+    const token = await resolveToken({ env: false })
 
     if (action === 'unstar' && existing && existing.mode === 'local') {
       await store.unstar(fullName)
@@ -388,6 +455,7 @@ export function apply(ctx, config = {}) {
   }
 
   async function handleConnect(req, res) {
+    if (req.method !== 'POST') return methodNotAllowed(res, 'POST')
     let body
     try {
       body = await readJsonBody(req)
@@ -414,6 +482,7 @@ export function apply(ctx, config = {}) {
   }
 
   async function handleDisconnect(req, res) {
+    if (req.method !== 'DELETE') return methodNotAllowed(res, 'DELETE')
     await clearToken()
     await store.setAccount(null)
     log(ctx, 'GitHub account disconnected; the local collection is kept')
@@ -422,6 +491,16 @@ export function apply(ctx, config = {}) {
 
   function route(pathname, handler) {
     return { kind: 'exact', path: pathname, handler }
+  }
+
+  // Every route is unauthenticated at the transport level (webServer has no
+  // admission control of its own), so each handler independently refuses
+  // cross-site and non-loopback requests before touching state or credentials.
+  function guard(req, res) {
+    const rejected = refusalOf(ctx, req)
+    if (rejected === undefined) return true
+    sendError(res, rejected, 'request origin is not allowed', 'forbidden')
+    return false
   }
 
   const web = safeGet(ctx, 'webServer')
@@ -438,8 +517,18 @@ export function apply(ctx, config = {}) {
     route(`${BASE}/account`, (req, res) => (req.method === 'DELETE' ? handleDisconnect(req, res) : handleConnect(req, res))),
   ]
 
+  // Keep a single guarded wrapper in front of every registered route, so a new
+  // route cannot accidentally ship without the fence.
   for (const definition of routes) {
-    effect(() => web.register(definition))
+    const handler = definition.handler
+    effect(() =>
+      web.register({
+        ...definition,
+        handler: (req, res) => {
+          if (guard(req, res)) handler(req, res)
+        },
+      }),
+    )
   }
 
   log(ctx, `ready (data=${dataDir}, ttl=${ttlMinutes}m, token=${fixedToken ? 'config' : 'auto'})`)

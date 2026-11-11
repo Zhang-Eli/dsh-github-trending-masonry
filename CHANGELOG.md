@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.1.2
+
+Security hardening for the local panel routes, after a review by the
+awesome-dsh-plugin maintainers.
+
+- Every `/dsh-github-trending-masonry/*` handler now refuses requests that did
+  not come from the panel itself: it delegates to the connection service's
+  `requestRejection` when available and otherwise enforces a loopback peer,
+  a loopback `Host`, a same-origin `Sec-Fetch-Site`/`Origin` check. This closes
+  the cross-site and DNS-rebinding window opened by `webServer.register`.
+- Mutating routes (`star`, `account`) require `Content-Type: application/json`
+  and the documented HTTP method; everything else is answered with 405/415
+  before any state or credential is touched.
+- `/star` no longer falls back to an ambient `GITHUB_TOKEN`/`GH_TOKEN`; only a
+  token the user explicitly connected (or configured) can star on their
+  behalf. Ambient tokens remain read-only enrichment for the feed.
+- Added `tests/security.test.mjs` covering the fence, method/content-type
+  checks and the env-token rule.
+
 ## 0.1.1
 
 - Panel footer: a "Feedback" link to the issue tracker on the left and a
