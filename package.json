@@ -1,6 +1,6 @@
 {
   "name": "dsh-github-trending-masonry",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "type": "module",
   "description": "GitHub Trending in a flat masonry card panel: period tabs, category chips, quick star (GitHub account or local list) and a persistent cache for instant reopen.",
   "license": "MIT",

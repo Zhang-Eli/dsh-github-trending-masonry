@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.1
+
+- Panel footer: a "Feedback" link to the issue tracker on the left and a
+  "Developed by" author avatar/credit on the right, separated from the content
+  by a hairline. Labels are localized in both English and Chinese.
+
 ## 0.1.0
 
 First public release.
