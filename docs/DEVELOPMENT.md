@@ -1,7 +1,7 @@
 # GitHub Trending（dsh-github-trending-masonry）开发交接
 
 > 给下一个开发 session 的「项目记忆」。发版或收工时更新；新 session 开场先读这份文档，
-> 再读 CHANGELOG.md 与 `git log --oneline -10`。最后更新：2026-11-13（0.2.0 发布：扁平/悬浮两种 UI 风格 + 卡片头图 + 市场双截图；市场描述精简文案本轮随 PR 推送）。
+> 再读 CHANGELOG.md 与 `git log --oneline -10`。最后更新：2026-11-13（0.2.0 发布：扁平/悬浮两种 UI 风格 + 卡片头图 + 市场双截图；市场描述精简文案已提 PR #14897）。
 
 ## 1. 当前状态
 
@@ -9,7 +9,7 @@
 | --- | --- |
 | 仓库 | `C:\Users\Administrator\Documents\dsh-github-trending\dsh-github-trending-masonry`（分支 master；外层目录 `dsh-github-trending` 只是本机存放处，真正的插件仓库是内层这个） |
 | 远端 | https://github.com/Zhang-Eli/dsh-github-trending-masonry |
-| HEAD | Release 0.2.0 提交（已同步 origin/master；本机已把全库 CRLF 噪音清理回 LF，提交只含真实改动） |
+| HEAD | `3b1c972 Release 0.2.0: flat/elevated UI styles, README header art, refreshed marketplace screenshots`（已同步 origin/master；本机已把全库 CRLF 噪音清理回 LF，提交只含真实改动） |
 | tag | `v0.1.0`…`v0.2.0`（没有 GitHub Release） |
 | npm | `dsh-github-trending-masonry@0.2.0` 为 latest；`dist.shasum ebf7d075c5c5d3e9dbfee7793095fdbb23dcdfbc`，unpacked ~198.8 kB / 20 files |
 | 本地安装 | profile `desktop` 用 link: 指向本仓库：`C:\Users\Administrator\.dsh\profiles\desktop\package.json` 里 `"dsh-github-trending-masonry": "link:C:/Users/Administrator/Documents/dsh-github-trending/dsh-github-trending-masonry"`，且已进 `dsh.profile.bundles`；改文件即生效（client 半边刷新页面，host 半边重启宿主） |
@@ -89,7 +89,8 @@ node _gate_run.mjs github-trending-masonry _gate.json
 ## 6. 已知限制与下一步候选
 
 - [ ] 市场 format-1 索引 `index.json`（jsdelivr 上的 `dsh-plugin-catalog`）尚未收录；它由 nightly 探针/发布产生，等下一轮即可（市场搜索用的是 `plugins.json`，已收录）。
-- [ ] 市场描述精简文案（zh+en，去掉旧安全句与冗长披露）已备好：`docs/market-entry.pending.yml`（#14813 已按要求关闭未推）；等用户其他改动完成后一起提 PR，合并后等 awesome CI 重建 plugins.json 生效。
+- [ ] 市场描述精简 PR **#14897** 已提（2026-11-13，正文即 `docs/market-entry.pending.yml`）；等合并后 awesome CI 重建 plugins.json 生效。
+- [ ] 本机 gh 令牌缺 `workflow` scope：fork 无法 sync/推含 workflow 改动的分支；市场条目 PR 走「从 fork 旧 main 开分支只改 data/plugins」即可绕过（#14897 即如此）。
 - [ ] 没有 GitHub Release（只有 tag）；需要 tgz 附件时再补。
 - [ ] README「Options」里 env token 的说法与 0.1.2 只读规则容易误读，建议补一句「仅用于读取/限流」。
 - [ ] 测试只有 security；建议补 `normalizeSince` / `parseTrendingHtml` / `classify` / 缓存版本兼容的单测。
