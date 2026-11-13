@@ -25,6 +25,7 @@ window.__ModuleLoader__.load({
     const useMemo = React.useMemo
     const useRef = React.useRef
     const useCallback = React.useCallback
+    const useLayoutEffect = React.useLayoutEffect || React.useEffect
 
     const NS = 'dsh-github-trending-masonry'
     const BASE = '/dsh-github-trending-masonry'
@@ -32,6 +33,7 @@ window.__ModuleLoader__.load({
     const SNAPSHOT_PREFIX = NS + ':snapshot:'
     const PERIODS = ['daily', 'weekly', 'monthly']
     const TABS = ['trending', 'collection']
+    const STYLES = ['flat', 'elevated']
     const MAX_STACK = 5
     const MAX_FEATURES = 4
     const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=public_repo&description=DSH%20Trending%20Masonry'
@@ -53,6 +55,11 @@ window.__ModuleLoader__.load({
       'tab.label': '视图',
       'tab.trending': '趋势',
       'tab.collection': '我的收藏',
+      'style.label': '界面风格',
+      'style.flat': '扁平',
+      'style.elevated': '悬浮',
+      'style.flat.hint': '扁平风格：细描边卡片，无阴影',
+      'style.elevated.hint': 'Material Elevation：卡片带阴影，悬浮于背景之上',
       'period.label': '榜单周期',
       'period.daily': '日榜',
       'period.weekly': '周榜',
@@ -111,6 +118,11 @@ window.__ModuleLoader__.load({
       'tab.label': 'Views',
       'tab.trending': 'Trending',
       'tab.collection': 'Saved',
+      'style.label': 'UI style',
+      'style.flat': 'Flat',
+      'style.elevated': 'Elevated',
+      'style.flat.hint': 'Flat style: hairline card borders, no shadows',
+      'style.elevated.hint': 'Material elevation: cards float above the surface with layered shadows',
       'period.label': 'Period',
       'period.daily': 'Today',
       'period.weekly': 'This week',
@@ -269,6 +281,15 @@ window.__ModuleLoader__.load({
       return out
     }
 
+    /** README header art chosen by the Host, http(s) only; '' when absent. */
+    function imageOf(item) {
+      if (!isObject(item) || typeof item.image !== 'string') return ''
+      const url = item.image.trim()
+      if (!url || url.length > 600) return ''
+      if (!/^https?:\/\//i.test(url)) return ''
+      return url
+    }
+
     function normalizeAccount(value) {
       if (!isObject(value)) return { configured: false, login: null, avatarUrl: null }
       return {
@@ -294,6 +315,7 @@ window.__ModuleLoader__.load({
         url: repoUrl(source),
         description: text(source.description),
         intro: typeof source.intro === 'string' ? source.intro : null,
+        image: typeof source.image === 'string' ? source.image : null,
         features: Array.isArray(source.features)
           ? source.features.filter(function (entry) {
               return typeof entry === 'string'
@@ -332,7 +354,7 @@ window.__ModuleLoader__.load({
     }
 
     function readPrefs() {
-      const fallback = { since: 'daily', tab: 'trending' }
+      const fallback = { since: 'daily', tab: 'trending', style: 'flat' }
       const raw = storageGet(PREFS_KEY)
       if (!raw) return fallback
       try {
@@ -341,6 +363,7 @@ window.__ModuleLoader__.load({
         return {
           since: PERIODS.indexOf(parsed.since) >= 0 ? parsed.since : fallback.since,
           tab: TABS.indexOf(parsed.tab) >= 0 ? parsed.tab : fallback.tab,
+          style: STYLES.indexOf(parsed.style) >= 0 ? parsed.style : fallback.style,
         }
       } catch (error) {
         return fallback
@@ -348,7 +371,7 @@ window.__ModuleLoader__.load({
     }
 
     function writePrefs(prefs) {
-      storageSet(PREFS_KEY, JSON.stringify({ since: prefs.since, tab: prefs.tab }))
+      storageSet(PREFS_KEY, JSON.stringify({ since: prefs.since, tab: prefs.tab, style: prefs.style }))
     }
 
     /** Snapshots are keyed per period and per UI language (the Host translates intros). */
@@ -596,6 +619,50 @@ window.__ModuleLoader__.load({
     }
 
     /* ------------------------------------------------------------------ */
+    /* Theme tone                                                          */
+    /* ------------------------------------------------------------------ */
+
+    /**
+     * 'dark' | 'light' from the resolved --dsw-alias-bg-base token. The
+     * elevated variant carries depth differently per tone (shadows in light,
+     * surface lightness steps in dark), and the host can flip the theme live,
+     * so the tone is probed on mount and re-probed on html/body attribute
+     * mutations. Unparseable tokens fall back to 'light'.
+     */
+    function probeTone() {
+      try {
+        const probe = document.createElement('span')
+        probe.style.cssText = 'position:absolute;left:-9999px;top:0;visibility:hidden;background-color:var(--dsw-alias-bg-base)'
+        document.body.appendChild(probe)
+        const parsed = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(getComputedStyle(probe).backgroundColor)
+        document.body.removeChild(probe)
+        if (!parsed) return 'light'
+        const luminance = 0.2126 * Number(parsed[1]) + 0.7152 * Number(parsed[2]) + 0.0722 * Number(parsed[3])
+        return luminance < 140 ? 'dark' : 'light'
+      } catch (error) {
+        return 'light'
+      }
+    }
+
+    function useTone() {
+      const [tone, setTone] = useState(probeTone)
+      useLayoutEffect(function () {
+        setTone(probeTone())
+        function recheck() {
+          setTone(probeTone())
+        }
+        const observer = new MutationObserver(recheck)
+        const options = { attributes: true, attributeFilter: ['class', 'data-theme', 'style'] }
+        observer.observe(document.documentElement, options)
+        observer.observe(document.body, options)
+        return function () {
+          observer.disconnect()
+        }
+      }, [])
+      return tone
+    }
+
+    /* ------------------------------------------------------------------ */
     /* Icons                                                               */
     /* ------------------------------------------------------------------ */
 
@@ -729,6 +796,7 @@ window.__ModuleLoader__.load({
       const description = text(item.description).trim()
       const intro = introOf(item)
       const features = featuresOf(item)
+      const cardImage = imageOf(item)
       const stack = stackOf(item)
       const rank = Number(item.rank) || Number(props.index) + 1
       const gain = Number(item.delta) || 0
@@ -776,6 +844,24 @@ window.__ModuleLoader__.load({
             h('span', null, '·'),
             h('span', null, t('meta.' + (PERIODS.indexOf(props.since) >= 0 ? props.since : 'daily'))),
           ),
+        )
+      }
+
+      if (cardImage) {
+        // Header art from the project README, when it has one: full width, capped.
+        children.push(
+          h('img', {
+            className: 'gtm-card-img',
+            key: 'image',
+            src: cardImage,
+            alt: '',
+            loading: 'lazy',
+            decoding: 'async',
+            referrerPolicy: 'no-referrer',
+            onError: function (event) {
+              event.currentTarget.style.display = 'none'
+            },
+          }),
         )
       }
 
@@ -905,6 +991,32 @@ window.__ModuleLoader__.load({
               },
             },
             t('period.' + value),
+          )
+        }),
+      )
+    }
+
+    /** Two visual styles: hairline-flat cards or Material elevation shadows. */
+    function StyleToggle(props) {
+      const t = props.t
+      return h(
+        'div',
+        { className: 'gtm-seg', role: 'group', 'aria-label': t('style.label') },
+        STYLES.map(function (value) {
+          const active = props.value === value
+          return h(
+            'button',
+            {
+              key: value,
+              type: 'button',
+              'data-active': active ? '1' : '0',
+              'aria-pressed': active ? 'true' : 'false',
+              title: t('style.' + value + '.hint'),
+              onClick: function () {
+                props.onChange(value)
+              },
+            },
+            t('style.' + value),
           )
         }),
       )
@@ -1174,7 +1286,7 @@ window.__ModuleLoader__.load({
     }
 
     /* ------------------------------------------------------------------ */
-    /* Styles: flat only — 1px borders, ≤10px radius, theme tokens          */
+    /* Styles: flat base + Material elevation variant via [data-style]     */
     /* ------------------------------------------------------------------ */
 
     const CSS = [
@@ -1231,6 +1343,7 @@ window.__ModuleLoader__.load({
       '.gtm-gain{color:var(--dsw-alias-state-success-primary);font-weight:600}',
       '.gtm-badge{display:inline-flex;align-items:center;height:17px;padding:0 6px;border-radius:5px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-secondary);font-size:10.5px;line-height:1}',
       '.gtm-desc{margin:0;font-size:12.5px;line-height:1.55;color:var(--dsw-alias-label-secondary);word-break:break-word}',
+      '.gtm-card-img{display:block;width:100%;max-height:360px;object-fit:contain;border-radius:8px;border:1px solid var(--dsw-alias-border-l1);background:var(--dsw-alias-bg-layer-2)}',
       '.gtm-intro{display:flex;flex-direction:column;min-width:0}',
       '.gtm-intro-p{margin:0 0 6px;font-size:12.5px;line-height:1.6;color:var(--dsw-alias-label-secondary);white-space:pre-line;word-break:break-word}',
       '.gtm-intro-p:last-child{margin-bottom:0}',
@@ -1286,6 +1399,51 @@ window.__ModuleLoader__.load({
       '.gtm-foot-avatar{width:16px;height:16px;border-radius:50%;object-fit:cover;background:var(--dsw-alias-bg-layer-2);flex:none}',
       '.gtm-foot-name{color:var(--dsw-alias-label-secondary);text-decoration:none}',
       '.gtm-foot-name:hover,.gtm-foot-name:focus-visible{color:var(--dsw-alias-brand-primary);text-decoration:underline;text-underline-offset:3px;outline:none}',
+      '.gtm-toolbar-right{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}',
+      // Material elevation variant — the WHOLE interface is Material here,
+      // not just the cards. Every interactive surface drops its outline and
+      // is lifted with the --gtm-e* shadow ladder; in the dark tone black
+      // shadows barely read (uxcel dark-elevation guide), so the --gtm-surf*
+      // tokens switch to a surface LIGHTNESS ladder over bg-layer-2
+      // (card 3% < controls 4% < card hover 6% < control hover 7% < dialog
+      // 8% < active segment 9%). color-mix degrades to the plain tokens.
+      '.gtm-root[data-style="elevated"]{--gtm-e0:0 1px 2px rgba(0,0,0,.22),0 1px 3px rgba(0,0,0,.12);--gtm-e1:0 1px 2px rgba(0,0,0,.30),0 2px 6px rgba(0,0,0,.22),0 6px 14px rgba(0,0,0,.14);--gtm-e2:0 2px 4px rgba(0,0,0,.32),0 6px 12px rgba(0,0,0,.24),0 14px 28px rgba(0,0,0,.18);--gtm-surf:var(--dsw-alias-bg-layer-2);--gtm-surf-hover:var(--dsw-alias-bg-layer-2);--gtm-surf-dlg:var(--dsw-alias-bg-layer-2);--gtm-surf-ctl:var(--dsw-alias-bg-layer-2);--gtm-surf-ctl-hi:var(--dsw-alias-bg-layer-2);--gtm-surf-active:var(--dsw-alias-bg-base);--gtm-inset-chip:rgba(0,0,0,.05)}',
+      '.gtm-root[data-style="elevated"] .gtm-card{border-color:transparent;background:var(--gtm-surf);border-radius:0;box-shadow:var(--gtm-e1);transition:box-shadow .16s ease,transform .16s ease,background-color .16s ease}',
+      '.gtm-root[data-style="elevated"] .gtm-card:hover{border-color:transparent;background:var(--gtm-surf-hover);box-shadow:var(--gtm-e2);transform:translateY(-2px)}',
+      '.gtm-root[data-style="elevated"] .gtm-skel{border-color:transparent;border-radius:0;box-shadow:var(--gtm-e1)}',
+      '.gtm-root[data-style="elevated"] .gtm-dialog{border-color:transparent;background:var(--gtm-surf-dlg);border-radius:14px;box-shadow:var(--gtm-e2)}',
+      '.gtm-root[data-style="elevated"] .gtm-error{border-radius:12px;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e1)}',
+      // Raised buttons and the account pill.
+      '.gtm-root[data-style="elevated"] .gtm-btn{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0);transition:box-shadow .16s ease,background-color .16s ease}',
+      '.gtm-root[data-style="elevated"] .gtm-btn:hover{border-color:transparent;background:var(--gtm-surf-ctl-hi);box-shadow:var(--gtm-e1)}',
+      '.gtm-root[data-style="elevated"] .gtm-btn[data-primary="1"],.gtm-root[data-style="elevated"] .gtm-btn[data-primary="1"]:hover{border-color:transparent;background:var(--dsw-alias-brand-primary);color:#fff;box-shadow:var(--gtm-e1)}',
+      '.gtm-root[data-style="elevated"] .gtm-btn[data-primary="1"]:disabled{background:var(--gtm-surf-ctl);color:var(--dsw-alias-label-secondary);box-shadow:none}',
+      '.gtm-root[data-style="elevated"] .gtm-account{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0)}',
+      '.gtm-root[data-style="elevated"] .gtm-account:hover{background:var(--gtm-surf-ctl-hi);box-shadow:var(--gtm-e1)}',
+      // Segmented controls & tabs: the bar lifts, the active segment floats.
+      '.gtm-root[data-style="elevated"] .gtm-tabs,.gtm-root[data-style="elevated"] .gtm-seg{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0)}',
+      '.gtm-root[data-style="elevated"] .gtm-tabs button,.gtm-root[data-style="elevated"] .gtm-seg button{background:transparent}',
+      '.gtm-root[data-style="elevated"] .gtm-tabs button[data-active="1"],.gtm-root[data-style="elevated"] .gtm-seg button[data-active="1"]{background:var(--gtm-surf-active);box-shadow:var(--gtm-e0)}',
+      '.gtm-root[data-style="elevated"] .gtm-count{border-color:transparent}',
+      // Filter chips.
+      '.gtm-root[data-style="elevated"] .gtm-chip{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0);transition:box-shadow .16s ease,background-color .16s ease}',
+      '.gtm-root[data-style="elevated"] .gtm-chip:hover{background:var(--gtm-surf-ctl-hi);box-shadow:var(--gtm-e1)}',
+      '.gtm-root[data-style="elevated"] .gtm-chip[data-active="1"]{background:var(--gtm-surf-active);box-shadow:var(--gtm-e1)}',
+      // Dialog controls, inputs and notices.
+      '.gtm-root[data-style="elevated"] .gtm-close{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0)}',
+      '.gtm-root[data-style="elevated"] .gtm-close:hover{background:var(--gtm-surf-ctl-hi);box-shadow:var(--gtm-e1)}',
+      '.gtm-root[data-style="elevated"] .gtm-input{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:inset 0 -1px 0 var(--dsw-alias-border-l1)}',
+      '.gtm-root[data-style="elevated"] .gtm-input:focus{border-color:transparent;background:var(--gtm-surf-ctl-hi);box-shadow:inset 0 -2px 0 var(--dsw-alias-brand-primary)}',
+      '.gtm-root[data-style="elevated"] .gtm-account-box{border-color:transparent;background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0)}',
+      '.gtm-root[data-style="elevated"] .gtm-inline-error,.gtm-root[data-style="elevated"] .gtm-inline-warn{background:var(--gtm-surf-ctl);box-shadow:var(--gtm-e0)}',
+      '.gtm-root[data-style="elevated"] .gtm-empty{border-color:transparent;border-style:solid;background:var(--gtm-surf);box-shadow:var(--gtm-e1)}',
+      // Inside cards: tonal chips/badges/avatars replace outlined ones.
+      '.gtm-root[data-style="elevated"] .gtm-rank,.gtm-root[data-style="elevated"] .gtm-badge,.gtm-root[data-style="elevated"] .gtm-tag,.gtm-root[data-style="elevated"] .gtm-avatar,.gtm-root[data-style="elevated"] .gtm-avatar-sm,.gtm-root[data-style="elevated"] .gtm-avatar-lg{border-color:transparent;background:var(--gtm-inset-chip)}',
+      '.gtm-root[data-style="elevated"] .gtm-card-img{border-color:transparent}',
+      '.gtm-root[data-style="elevated"] .gtm-mark{border-color:transparent;box-shadow:var(--gtm-e0)}',
+      // Dark tone: lightness ladder + soft broad shadows.
+      '.gtm-root[data-style="elevated"][data-tone="dark"]{--gtm-e0:0 1px 3px rgba(0,0,0,.40),0 4px 12px rgba(0,0,0,.30);--gtm-e1:0 2px 8px rgba(0,0,0,.45),0 10px 28px rgba(0,0,0,.35);--gtm-e2:0 4px 12px rgba(0,0,0,.50),0 18px 44px rgba(0,0,0,.40);--gtm-surf:color-mix(in srgb,#fff 3%,var(--dsw-alias-bg-layer-2));--gtm-surf-hover:color-mix(in srgb,#fff 6%,var(--dsw-alias-bg-layer-2));--gtm-surf-dlg:color-mix(in srgb,#fff 8%,var(--dsw-alias-bg-layer-2));--gtm-surf-ctl:color-mix(in srgb,#fff 4%,var(--dsw-alias-bg-layer-2));--gtm-surf-ctl-hi:color-mix(in srgb,#fff 7%,var(--dsw-alias-bg-layer-2));--gtm-surf-active:color-mix(in srgb,#fff 9%,var(--dsw-alias-bg-layer-2));--gtm-inset-chip:rgba(255,255,255,.07)}',
+      
       '@media (max-width:760px){.gtm-root{padding:14px 12px 40px}.gtm-head-actions{justify-content:flex-start}}',
     ].join('\n')
 
@@ -1359,9 +1517,12 @@ window.__ModuleLoader__.load({
       const lang = useMemo(function () {
         return feedLanguage(LOCALE)
       }, [])
+      // Elevated surfaces need to know the host tone (light vs dark theme).
+      const tone = useTone()
       const initial = useMemo(readPrefs, [])
       const [since, setSince] = useState(initial.since)
       const [tab, setTab] = useState(initial.tab)
+      const [styleMode, setStyleMode] = useState(initial.style)
       const [category, setCategory] = useState('all')
       const [refreshKey, setRefreshKey] = useState(0)
       const [account, setAccount] = useState({ configured: false, login: null, avatarUrl: null })
@@ -1415,9 +1576,9 @@ window.__ModuleLoader__.load({
       // Restore/remember the last period and top-level tab.
       useEffect(
         function () {
-          writePrefs({ since: since, tab: tab })
+          writePrefs({ since: since, tab: tab, style: styleMode })
         },
-        [since, tab],
+        [since, tab, styleMode],
       )
 
       // Account + collected list.
@@ -1701,7 +1862,12 @@ window.__ModuleLoader__.load({
               h('span', { className: 'gtm-count' }, String(stars.length)),
             ),
           ),
-          tab === 'trending' ? h(PeriodTabs, { t: t, value: since, onChange: changePeriod }) : null,
+          h(
+            'div',
+            { className: 'gtm-toolbar-right' },
+            tab === 'trending' ? h(PeriodTabs, { t: t, value: since, onChange: changePeriod }) : null,
+            h(StyleToggle, { t: t, value: styleMode, onChange: setStyleMode }),
+          ),
         ),
       )
 
@@ -1787,7 +1953,7 @@ window.__ModuleLoader__.load({
 
       return h(
         'div',
-        { className: 'gtm-root' },
+        { className: 'gtm-root', 'data-style': styleMode, 'data-tone': tone },
         h('style', null, CSS),
         h('div', { className: 'gtm-shell' }, children),
         h(AccountDialog, {

@@ -1,8 +1,8 @@
 {
   "name": "dsh-github-trending-masonry",
-  "version": "0.1.2",
+  "version": "0.2.0",
   "type": "module",
-  "description": "GitHub Trending in a flat masonry card panel: period tabs, category chips, quick star (GitHub account or local list) and a persistent cache for instant reopen.",
+  "description": "GitHub Trending in a masonry card panel with flat or Material-elevated styles: period tabs, category chips, quick star (GitHub account or local list) and a persistent cache for instant reopen.",
   "license": "MIT",
   "author": "wei.zhang",
   "repository": {

@@ -1,7 +1,7 @@
 {
   "meta": {
     "title": "GitHub Trending",
-    "description": "Browse GitHub Trending daily/weekly/monthly boards as flat masonry cards with category chips, one-click starring (GitHub account or a local-only list) and a persistent cache that makes reopening fast."
+    "description": "GitHub Trending masonry feed in the DSH sidebar: daily, weekly and monthly boards with category chips, concise project intros, and one-click starring that syncs to your GitHub account or saves to a local collection."
   },
   "nav": {
     "title": "GitHub Trending"

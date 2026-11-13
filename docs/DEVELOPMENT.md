@@ -1,19 +1,19 @@
 # GitHub Trending（dsh-github-trending-masonry）开发交接
 
 > 给下一个开发 session 的「项目记忆」。发版或收工时更新；新 session 开场先读这份文档，
-> 再读 CHANGELOG.md 与 `git log --oneline -10`。最后更新：2026-11-11（0.1.2 发布后）。
+> 再读 CHANGELOG.md 与 `git log --oneline -10`。最后更新：2026-11-13（0.2.0 发布：扁平/悬浮两种 UI 风格 + 卡片头图 + 市场双截图；市场描述精简文案本轮随 PR 推送）。
 
 ## 1. 当前状态
 
 | 项 | 值 |
 | --- | --- |
-| 仓库 | `D:\Documents\deepseek-harness\default-workspace\github-trending-masonry`（分支 master） |
+| 仓库 | `C:\Users\Administrator\Documents\dsh-github-trending\dsh-github-trending-masonry`（分支 master；外层目录 `dsh-github-trending` 只是本机存放处，真正的插件仓库是内层这个） |
 | 远端 | https://github.com/Zhang-Eli/dsh-github-trending-masonry |
-| HEAD | `959dbae Security: fence panel routes against cross-site and DNS-rebinding requests` |
-| tag | `v0.1.0` / `v0.1.1` / `v0.1.2`（没有 GitHub Release） |
-| npm | `dsh-github-trending-masonry@0.1.2` 为 latest；`dist.shasum a8d7b372…`，unpacked 181,950 B |
-| 本地安装 | profile `desktop` 用 symlink 指向本仓库（profile `package.json` 里是 `link:D:/…/github-trending-masonry`），改文件即生效 |
-| 测试 | `npm test` → 10/10 通过（node:test） |
+| HEAD | Release 0.2.0 提交（已同步 origin/master；本机已把全库 CRLF 噪音清理回 LF，提交只含真实改动） |
+| tag | `v0.1.0`…`v0.2.0`（没有 GitHub Release） |
+| npm | `dsh-github-trending-masonry@0.2.0` 为 latest；`dist.shasum ebf7d075c5c5d3e9dbfee7793095fdbb23dcdfbc`，unpacked ~198.8 kB / 20 files |
+| 本地安装 | profile `desktop` 用 link: 指向本仓库：`C:\Users\Administrator\.dsh\profiles\desktop\package.json` 里 `"dsh-github-trending-masonry": "link:C:/Users/Administrator/Documents/dsh-github-trending/dsh-github-trending-masonry"`，且已进 `dsh.profile.bundles`；改文件即生效（client 半边刷新页面，host 半边重启宿主） |
+| 测试 | `npm test` → 16/16 通过（security 10 + readme 头图 6；沙箱里 spawn EPERM 时用 `node --test --test-isolation=none`） |
 | 门禁 | 在已发布版本上重跑：1 error（`version-taken`，预期）+ 3 warn + 4 info；发版前 bump 版本后应为 0 error |
 | 市场 | awesome-dsh-plugin PR #14179 已合并（2026-11-11T06:21Z）；市场目录 `plugins.json` 已收录（added 2026-11-11），format-1 索引 `index.json` 仍缺 |
 
@@ -28,7 +28,7 @@
 | `lib/readme.js` | 取 README（raw 优先，GitHub API 兜底）→ `intro` / `features` 纯文本 |
 | `lib/summarize.js` | 用 DSH 模型服务把 README 写成界面语言的简介 + 要点 |
 | `lib/translate.js` | 优先 DSH `translator` 服务，Google 公共端点兜底；失败保留原文 |
-| `lib/enrich.js` | 每个板块的 README + 简介 enrich，磁盘缓存 `readme-cache.json` |
+| `lib/enrich.js` | 每个板块的 README + 简介 + 头图 image enrich，磁盘缓存 `readme-cache.json` |
 | `lib/cache.js` | `FeedCache`：内存 + 磁盘（`feed-<since>-<lang>.json`），TTL 默认 30 分钟 |
 | `lib/store.js` | `state.json`：本地收藏、账号元数据、token 兜底；原子写、0600 |
 | `lib/github.js` | `verifyToken` / `setStar` |
@@ -46,7 +46,7 @@
 ## 3. 常用命令
 
 ```bash
-cd /d/Documents/deepseek-harness/default-workspace/github-trending-masonry
+cd /c/Users/Administrator/Documents/dsh-github-trending/dsh-github-trending-masonry
 node --check index.js && node --check client.js   # 语法
 npm test                                          # node:test，10 例
 npm view dsh-github-trending-masonry version       # 线上版本
@@ -78,15 +78,18 @@ node _gate_run.mjs github-trending-masonry _gate.json
 - 面板文案在 `client.js` 的 ZH/EN 字典里；只改 `locale/*.json` 不会改变 UI。改标题/导航名要同时改 client.js 两个字典 + `locale/zh.json` + `locale/en.json`。
 - token 优先级：credentials 记录 → `state.json` 兜底 → `config.token` → 环境变量（仅 `env:true` 的只读路径）。别把 env token 接进写路径。
 - 缓存：TTL 默认 30 分钟 + localStorage 快照即时开屏；`refresh=1` 强制拉新。磁盘缓存带 `version` 常量，改结构要升 `CACHE_VERSION` 或兼容旧记录。
+- 卡片头图（2026-11-13 新增，未发版）：`extractReadme(raw, fullName)` 返回 `image`；`lib/readme.js` 的 `extractHeaderImage` 只扫 README 前 120 行，跳过 shields.io/badge 等徽章与 ≤100px 小图，相对路径解析到 `raw.githubusercontent.com/<full>/HEAD/`。`readme-cache.json` 的 `image` 字段为兼容式新增（未升 CACHE_VERSION）：旧条目缺 key 时 `ReadmeEnricher.upgradeImage` 首用补抓一次只回填 image，不动 intro/features/summaries/translations。卡片渲染在 meta 与 intro 之间，`client.js` `imageOf` 再校验一次 https。
 - README 的 Options 是公开契约：改 config key 或取值范围要同步 README 与 `index.js` 的 clamp。
 - 门禁的 `client-double-load` 警告是已知误报（探针会把 bundle 执行两次），不要为此加回 guard。
 - 开发机是 Windows + MSYS bash：`.git/index.lock` 偶发权限拒绝是暂时性的，重试即可；持续出现用 `diagnose-windows-sandbox-acl`。
+- **推 PR 前必须先向用户确认**（2026-11-13 用户指示）：包括 awesome 市场条目 PR、npm 发布配套 GitHub 操作等；本地 commit 不受限但提交前先 `git diff --stat` 确认行尾噪音未被带入。
+- `locale/*.json`（市场元数据）已同步为精简描述，与 `docs/market-entry.pending.yml` 保持一致。
 - 市场目录由 awesome 仓库 CI 重建，插件仓库改不到；PR 合并后要等站点构建/部署完成。
 
 ## 6. 已知限制与下一步候选
 
 - [ ] 市场 format-1 索引 `index.json`（jsdelivr 上的 `dsh-plugin-catalog`）尚未收录；它由 nightly 探针/发布产生，等下一轮即可（市场搜索用的是 `plugins.json`，已收录）。
-- [ ] 市场描述仍带旧句「HTTP 路由没有 DSH 访问检查」：0.1.2 已修复，等审阅者删句或评论提醒。
+- [ ] 市场描述精简文案（zh+en，去掉旧安全句与冗长披露）已备好：`docs/market-entry.pending.yml`（#14813 已按要求关闭未推）；等用户其他改动完成后一起提 PR，合并后等 awesome CI 重建 plugins.json 生效。
 - [ ] 没有 GitHub Release（只有 tag）；需要 tgz 附件时再补。
 - [ ] README「Options」里 env token 的说法与 0.1.2 只读规则容易误读，建议补一句「仅用于读取/限流」。
 - [ ] 测试只有 security；建议补 `normalizeSince` / `parseTrendingHtml` / `classify` / 缓存版本兼容的单测。

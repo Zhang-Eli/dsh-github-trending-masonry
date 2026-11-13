@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.0
+
+- Two UI styles, switchable in the panel toolbar and remembered across
+  sessions: **flat** (hairline-bordered cards, the previous look) and
+  **elevated** (Material Design elevation — cards, buttons, tabs, chips,
+  dialogs and inputs float on layered shadows while borders recede; hovering
+  a card raises it one step). Shadows and surfaces adapt to light and dark.
+- Card header art: when a project README opens with a banner, hero screenshot
+  or logo, the card shows it between the title row and the introduction.
+  Badge rows are skipped and text-first READMEs render no image, so a card
+  grows a picture only when the project actually has one. Starred collection
+  entries snapshot the image too; existing README-cache entries upgrade
+  themselves silently on first reuse; header art is shown in full (contain, capped at 360px tall).
+
 ## 0.1.2
 
 Security hardening for the local panel routes, after a review by the

@@ -395,6 +395,7 @@ export function apply(ctx, config = {}) {
       stack: Array.isArray(repo.stack) ? repo.stack.filter((entry) => typeof entry === 'string').slice(0, 8) : undefined,
       intro: typeof repo.intro === 'string' ? repo.intro.slice(0, 1400) : undefined,
       features: Array.isArray(repo.features) ? repo.features.filter((entry) => typeof entry === 'string').slice(0, 4) : undefined,
+      image: typeof repo.image === 'string' && /^https?:\/\//i.test(repo.image.trim()) ? repo.image.trim().slice(0, 600) : undefined,
       category: typeof repo.category === 'string' ? repo.category : undefined,
       categoryZh: typeof repo.categoryZh === 'string' ? repo.categoryZh : undefined,
       categoryEn: typeof repo.categoryEn === 'string' ? repo.categoryEn : undefined,

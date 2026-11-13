@@ -4,7 +4,9 @@
 
 Browse GitHub Trending's daily, weekly and monthly boards in a masonry layout, with one-click starring that syncs to GitHub.
 
-![The GitHub Trending panel in the DSH sidebar](assets/screenshot-1.png)
+![The GitHub Trending panel in the DSH sidebar (flat style)](assets/screenshot-1.png)
+
+![The same panel in the elevated Material style — cards and controls float on layered shadows](assets/screenshot-2.png)
 
 ## What it does
 
@@ -14,7 +16,7 @@ Browse GitHub Trending's daily, weekly and monthly boards in a masonry layout, w
 - **Masonry cards**: responsive columns where a longer introduction simply makes a taller card, and the whole board scrolls as one page.
 - **Instant tab switches**: once the visible board loads, the other two are readied in the background; reopening the panel paints the last content immediately, and the refresh button is there when you want live data.
 - **One-click star**: connect a GitHub account (Personal Access Token) and the star lands on your real account; without an account it is kept in "我的收藏" and survives restarts.
-- **Only what matters on a card**: the introduction, the tech stack, the period tag and the category chips.
+- **Only what matters on a card**: the introduction, the project's README header art when it has one, the tech stack, the period tag and the category chips.
 
 ## Install
 

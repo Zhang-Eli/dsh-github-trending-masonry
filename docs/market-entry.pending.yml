@@ -1,0 +1,11 @@
+# 待推的市场条目（awesome-dsh-plugin/awesome-dsh-plugin → data/plugins/Zhang-Eli__dsh-github-trending-masonry.yml）
+# 用途：描述精简版，等插件其他改动完成后与用户确认再一起提 PR（2026-11-13 用户指示：推 PR 前必须先确认）。
+# 使用方式：把下面正文覆盖到 data/plugins/Zhang-Eli__dsh-github-trending-masonry.yml（不提 PR 时本文件留在 docs/，不进 npm files 白名单）。
+---
+url: https://github.com/Zhang-Eli/dsh-github-trending-masonry
+name: Zhang-Eli/dsh-github-trending-masonry
+category: tools
+description:
+  en: 'GitHub Trending masonry feed in the DSH sidebar: daily, weekly and monthly boards with category chips, concise project intros, and one-click starring that syncs to your GitHub account or saves to a local collection.'
+  zh: '带侧边栏的 GitHub Trending 瀑布流：日/周/月三榜加分类标签，简明扼要的项目简介，一键加星可同步到 GitHub 账号或存入本地收藏。'
+icon: https://raw.githubusercontent.com/Zhang-Eli/dsh-github-trending-masonry/master/assets/icon-180.png
