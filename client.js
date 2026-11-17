@@ -933,23 +933,130 @@ window.__ModuleLoader__.load({
     /* Waterfall                                                           */
     /* ------------------------------------------------------------------ */
 
-    /** Round-robin distribution (items[i % columns]) so rank order reads left-to-right. */
+    /** Stable cache key for a card: repo full name, falling back to position. */
+    function masonryKeyOf(item, index) {
+      const full = fullNameOf(item)
+      return full || 'pos-' + index
+    }
+
+    /** Placement fingerprint of a bucketing: same signature = same layout. */
+    function masonrySignature(buckets) {
+      let out = ''
+      for (let c = 0; c < buckets.length; c += 1) {
+        for (let k = 0; k < buckets[c].length; k += 1) out += buckets[c][k].index + '.'
+        out += '|'
+      }
+      return out
+    }
+
+    function masonryHeightsKnown(heights, items) {
+      for (let index = 0; index < items.length; index += 1) {
+        if (typeof heights[masonryKeyOf(items[index], index)] !== 'number') return false
+      }
+      return true
+    }
+
+    /**
+     * Distribute items into columns. Without heights, round-robin keeps rank
+     * order reading left-to-right. With heights, each item joins the shortest
+     * column so the columns finish level; ties prefer the left column.
+     */
+    function packMasonry(items, columns, heights) {
+      const out = []
+      for (let index = 0; index < columns; index += 1) out.push([])
+      if (!heights) {
+        for (let index = 0; index < items.length; index += 1) {
+          out[index % columns].push({ item: items[index], index: index })
+        }
+        return out
+      }
+      const columnHeights = []
+      for (let index = 0; index < columns; index += 1) columnHeights.push(0)
+      for (let index = 0; index < items.length; index += 1) {
+        let best = 0
+        for (let other = 1; other < columns; other += 1) {
+          if (columnHeights[other] < columnHeights[best] - 0.5) best = other
+        }
+        out[best].push({ item: items[index], index: index })
+        columnHeights[best] += heights[masonryKeyOf(items[index], index)]
+      }
+      return out
+    }
+
+    /** Read each rendered card's offsetHeight back into a key -> px map. */
+    function measureMasonry(container, buckets) {
+      const cols = container.children
+      const heights = {}
+      for (let c = 0; c < buckets.length; c += 1) {
+        const col = cols[c]
+        if (!col) return null
+        const kids = col.children
+        for (let k = 0; k < buckets[c].length; k += 1) {
+          const node = kids[k]
+          if (!node) return null
+          heights[masonryKeyOf(buckets[c][k].item, buckets[c][k].index)] = node.offsetHeight
+        }
+      }
+      return heights
+    }
+
+    /**
+     * Waterfall with shortest-column packing. Card heights are only knowable
+     * after layout (lazy README art, async intros), so the first pass over an
+     * unknown feed is round-robin; every card's height is then measured from
+     * the DOM, cached per item key and column count, and the feed re-packs
+     * once into the shortest columns — synchronously, before paint. Late
+     * image loads re-measure, and a rebalance only happens when the packing
+     * would actually change, so the layout settles instead of oscillating.
+     */
     function Masonry(props) {
       const measured = useColumns()
       const ref = measured[0]
       const columns = measured[1]
       const items = Array.isArray(props.items) ? props.items : []
 
+      const cacheRef = useRef({ columns: 0, heights: {} })
+      const [tick, setTick] = useState(0)
+
       const buckets = useMemo(
         function () {
-          const out = []
-          for (let index = 0; index < columns; index += 1) out.push([])
-          for (let index = 0; index < items.length; index += 1) {
-            out[index % columns].push({ item: items[index], index: index })
-          }
-          return out
+          const cache = cacheRef.current
+          const usable = cache.columns === columns && masonryHeightsKnown(cache.heights, items)
+          return packMasonry(items, columns, usable ? cache.heights : null)
         },
-        [items, columns],
+        [items, columns, tick],
+      )
+
+      useLayoutEffect(
+        function () {
+          const container = ref.current
+          if (!container || items.length === 0) return
+          const heights = measureMasonry(container, buckets)
+          if (!heights) return
+          cacheRef.current = { columns: columns, heights: heights }
+          if (masonrySignature(packMasonry(items, columns, heights)) !== masonrySignature(buckets)) {
+            setTick(function (value) { return value + 1 })
+          }
+        },
+        [buckets, items, columns],
+      )
+
+      useEffect(
+        function () {
+          const container = ref.current
+          if (!container) return undefined
+          function remeasure() {
+            setTick(function (value) { return value + 1 })
+          }
+          // load/error do not bubble; capture phase sees them at the images.
+          container.addEventListener('load', remeasure, true)
+          container.addEventListener('error', remeasure, true)
+          return function () {
+            container.removeEventListener('load', remeasure, true)
+            container.removeEventListener('error', remeasure, true)
+          }
+        },
+        [],
       )
 
       return h(

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Waterfall packing: each card now joins the currently **shortest column**
+  instead of strict round-robin, so the columns finish level. A tall card no
+  longer drags its whole side below the other — e.g. rank 15 fills the free
+  space beside rank 13 rather than stacking underneath it. Card heights are
+  measured from the rendered DOM, cached per repository and column count and
+  re-packed synchronously before paint; late-loading README header art
+  re-measures and rebalances only when the packing actually changes, so the
+  layout settles instead of oscillating. Rank order still reads left-to-right
+  top-to-bottom as closely as balanced columns allow.
+
 ## 0.2.0
 
 - Two UI styles, switchable in the panel toolbar and remembered across
