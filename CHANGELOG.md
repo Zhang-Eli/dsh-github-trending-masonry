@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.1 - 2026-11-17
 
 - Waterfall packing: each card now joins the currently **shortest column**
   instead of strict round-robin, so the columns finish level. A tall card no
