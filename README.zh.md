@@ -17,6 +17,8 @@
 - **切换零等待**：当前榜单出现后，另外两个榜单已在后台准备好；再次打开面板会立刻呈现上次的内容，刷新按钮才会重新获取实时数据。
 - **一键加星**：连接 GitHub 账号（Personal Access Token）后，星标直接打到你真实的 GitHub 账号；未连接时也能收藏，保存在「我的收藏」标签里，重启后仍在。
 - **卡片只看该看的**：项目简介、README 头图（项目有图时才显示）、技术栈、时间标签与分类标签。
+- **刷新不重下图**：README 头图与头像会镜像到本地一次，之后按一年不变缓存直接复用——项目没变，刷新缓存时图片不再重新下载。
+- **打开前已就绪**：DSH 一启动，插件就在后台刷新你上次查看的榜单并预下载图片——第一次打开面板直接呈现内容，而不是那时才开始下载。
 
 ## 安装
 
@@ -34,6 +36,13 @@ dsh plugin --profile desktop add dsh-github-trending-masonry
 - 右上角的账号按钮可以 **连接 GitHub**：填一个 Personal Access Token（classic token，勾上 `public_repo` 就够给公开仓库加星），之后加星会直接打到你自己的 GitHub 账号。不连接也能正常用，收藏只保存在本机；断开连接不会删掉本地收藏。
 
 ## 版本记录
+
+### 0.3.0 — 图片本地镜像
+
+- README 头图与作者头像镜像到插件数据目录 `images/`，`/image` 路由带 ETag 与一年 immutable 缓存；刷新榜单不再重新下载未变化项目的图片。
+- 镜像抓取带 SSRF 防护：只拉公网 http(s) 主机，拒绝内网/元数据地址、URL 凭据、自定义端口与超大文件；SVG 保持远程直连。
+- 卡片 key 改为按 `owner/repo` 稳定标识，排名变化不再重挂载、不再触发图片重载。
+- DSH 启动后自动在后台预热上次查看的榜单并预镜像图片（`warmup: false` 可关）；修复并发镜像时 `index.json` 条目被相互覆盖丢失的竞态。
 
 ### 0.1.0 — 首个公开版本
 
@@ -53,6 +62,8 @@ dsh plugin --profile desktop add dsh-github-trending-masonry
   name: dsh-github-trending-masonry
   config:
     ttlMinutes: 30        # 榜单缓存多久刷新一次，5..1440，默认 30 分钟
+    warmup: true          # DSH 启动后是否后台预热上次查看的榜单与图片
+    warmupDelayMs: 1500   # 预热前的等待毫秒数，0..60000，默认 1500 毫秒
     summaries: true       # 是否让模型写简介；关掉后显示 README 摘录的翻译
     summaryProvider: ''   # 换用别的模型服务
     summaryModel: ''      # 换用别的模型

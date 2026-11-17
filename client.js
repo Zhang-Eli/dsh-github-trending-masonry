@@ -203,6 +203,18 @@ window.__ModuleLoader__.load({
     }
 
     /** Owner avatar straight from GitHub so every card carries a recognisable image. */
+    function degradeImage(event) {
+      // 镜像图挂了退回原远程 URL，再挂就隐藏——缓存刷新不再重新下载图片
+      const node = event.currentTarget
+      const remote = node.getAttribute('data-remote')
+      if (remote && node.src !== remote) {
+        node.removeAttribute('data-remote')
+        node.src = remote
+        return
+      }
+      node.style.display = 'none'
+    }
+
     function avatarUrl(owner) {
       const login = text(owner).trim()
       if (!login) return ''
@@ -737,7 +749,9 @@ window.__ModuleLoader__.load({
     function Avatar(props) {
       const owner = text(props.owner).trim()
       const source = text(props.src).trim()
-      const url = source || avatarUrl(owner)
+      const remote = source || avatarUrl(owner)
+      // 头像走本地镜像（github.com/<login>.png 重定向到 avatars.githubusercontent.com，直连不稳定）
+      const url = remote && owner && !source ? BASE + '/image?avatar=' + encodeURIComponent(owner) : remote
       const className = props.size === 'lg' ? 'gtm-avatar-lg' : props.size === 'sm' ? 'gtm-avatar-sm' : 'gtm-avatar'
       return h(
         'span',
@@ -746,11 +760,10 @@ window.__ModuleLoader__.load({
         url
           ? h('img', {
               src: url,
+              'data-remote': remote || undefined,
               alt: owner,
               loading: 'lazy',
-              onError: function (event) {
-                event.currentTarget.style.display = 'none'
-              },
+              onError: degradeImage,
             })
           : null,
       )
@@ -848,19 +861,19 @@ window.__ModuleLoader__.load({
       }
 
       if (cardImage) {
-        // Header art from the project README, when it has one: full width, capped.
+        // Header art from the project README — served from the local mirror so a
+        // cache refresh reuses the file on disk instead of re-downloading it.
         children.push(
           h('img', {
             className: 'gtm-card-img',
             key: 'image',
-            src: cardImage,
+            src: fullName ? BASE + '/image?repo=' + encodeURIComponent(fullName) : cardImage,
+            'data-remote': cardImage,
             alt: '',
             loading: 'lazy',
             decoding: 'async',
             referrerPolicy: 'no-referrer',
-            onError: function (event) {
-              event.currentTarget.style.display = 'none'
-            },
+            onError: degradeImage,
           }),
         )
       }
@@ -1869,7 +1882,8 @@ window.__ModuleLoader__.load({
       const renderFeedCard = useCallback(
         function (item, index) {
           const fullName = fullNameOf(item)
-          const key = (fullName || 'repo') + '-' + index
+          // key 不带 index：排名变化不再整卡重挂载，<img> 不重新加载
+      const key = fullName || 'pos-' + index
           return h(RepoCard, {
             key: key,
             item: item,
@@ -1888,7 +1902,7 @@ window.__ModuleLoader__.load({
       const renderCollectionCard = useCallback(
         function (item, index) {
           const fullName = fullNameOf(item)
-          const key = (fullName || 'saved') + '-' + index
+          const key = fullName || 'saved-' + index
           return h(RepoCard, {
             key: key,
             item: item,

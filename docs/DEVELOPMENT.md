@@ -13,7 +13,7 @@
 | tag | `v0.1.0`…`v0.2.0`（没有 GitHub Release） |
 | npm | `dsh-github-trending-masonry@0.2.0` 为 latest；`dist.shasum ebf7d075c5c5d3e9dbfee7793095fdbb23dcdfbc`，unpacked ~198.8 kB / 20 files |
 | 本地安装 | profile `desktop` 用 link: 指向本仓库：`C:\Users\Administrator\.dsh\profiles\desktop\package.json` 里 `"dsh-github-trending-masonry": "link:C:/Users/Administrator/Documents/dsh-github-trending/dsh-github-trending-masonry"`，且已进 `dsh.profile.bundles`；改文件即生效（client 半边刷新页面，host 半边重启宿主） |
-| 测试 | `npm test` → 16/16 通过（security 10 + readme 头图 6；沙箱里 spawn EPERM 时用 `node --test --test-isolation=none`） |
+| 测试 | `npm test` → 25/25 通过（security 11 + readme 头图 6 + image 镜像 5 + warmup 预热 3；沙箱里 spawn EPERM 时用 `node --test --test-isolation=none`，必须用真实 node：宿主进程里 `process.execPath` 是 Electron） |
 | 门禁 | 在已发布版本上重跑：1 error（`version-taken`，预期）+ 3 warn + 4 info；发版前 bump 版本后应为 0 error |
 | 市场 | awesome-dsh-plugin PR #14179 已合并（2026-11-11T06:21Z）；市场目录 `plugins.json` 已收录（added 2026-11-11），format-1 索引 `index.json` 仍缺 |
 
@@ -21,7 +21,7 @@
 
 | 文件 | 职责 |
 | --- | --- |
-| `index.js` | Host 入口，`inject: ['webServer']`。5 条 `/dsh-github-trending-masonry/*` 路由 + 安全 fence + 缓存编排 + star/account + config 解析 |
+| `index.js` | Host 入口，`inject: ['webServer']`。6 条 `/dsh-github-trending-masonry/*` 路由（state/feed/star/account/health/image） + 安全 fence + 缓存编排 + star/account + 启动预热 + config 解析 |
 | `client.js` | Web 面板 bundle：`window.__ModuleLoader__.load`；注册 `sidebar.panellist`（order 35）与 `main` key；卡片瀑布流、周期 tab、分类 chips、收藏/账号、页脚；内嵌 ZH/EN 字典；localStorage 偏好与快照 |
 | `lib/trending.js` | 解析 https://github.com/trending（GitHub 没有官方 Trending API），字段缺失一律降级 |
 | `lib/analyze.js` | 确定性分类（chips）+ 技术栈行，不依赖 token |
@@ -30,16 +30,19 @@
 | `lib/translate.js` | 优先 DSH `translator` 服务，Google 公共端点兜底；失败保留原文 |
 | `lib/enrich.js` | 每个板块的 README + 简介 + 头图 image enrich，磁盘缓存 `readme-cache.json` |
 | `lib/cache.js` | `FeedCache`：内存 + 磁盘（`feed-<since>-<lang>.json`），TTL 默认 30 分钟 |
+| `lib/image-mirror.js` | `ImageMirror`：README 头图/头像按 URL hash 镜像到 `images/` + `index.json`；SSRF 校验（私网/元数据/凭据/自定义端口拒绝）、≤6MB、≤4 跳重定向、SVG 不镜像、300 条/60MB LRU；**抓取绝不带 token** |
 | `lib/store.js` | `state.json`：本地收藏、账号元数据、token 兜底；原子写、0600 |
 | `lib/github.js` | `verifyToken` / `setStar` |
-| `tests/security.test.mjs` | 10 个路由安全用例（fence、405/415、env token 不可用于加星） |
+| `tests/security.test.mjs` | 11 个路由安全用例（fence、405/415、/image CSRF、env token 不可用于加星） |
+| `tests/image.test.mjs` | 5 个镜像用例（首次拉取+磁盘复用、ETag 304、头像重定向链、参数校验、私网/SVG/超大/重定向环拒绝） |
+| `tests/warmup.test.mjs` | 3 个启动预热用例（无面板请求即写盘、跟随 lastFeed、TTL 内重启不重抓） |
 | `locale/*.json` | **只**是市场元数据（meta / nav），不驱动面板文案 |
 | `cordis.patch.yml` | bundle insert：id `github-trending-masonry` |
 | `assets/`、`screenshots.json` | 市场用截图与图标 |
 
 数据落点：
 
-- `~/.dsh/plugin-data/github-trending-masonry/`（本机；路径由 `config.dataDir` → `DSH_PROFILE_DIR` → `DSH_PROFILE` → `~/.dsh/plugin-data` 依次决定）：`state.json`、`feed-<daily|weekly|monthly>-<lang>.json`、`readme-cache.json`。
+- `~/.dsh/plugin-data/github-trending-masonry/`（本机；路径由 `config.dataDir` → `DSH_PROFILE_DIR` → `DSH_PROFILE` → `~/.dsh/plugin-data` 依次决定）：`state.json`、`feed-<daily|weekly|monthly>-<lang>.json`、`readme-cache.json`、`images/` + `index.json`（图片镜像，0600 原子写）。
 - GitHub token：DSH credentials 记录 `dsh-github-trending-masonry/github-token`；credentials 服务不可用时才落到 `state.json`。
 - 浏览器 localStorage：`dsh-github-trending-masonry:prefs`、`dsh-github-trending-masonry:snapshot:<since>:<lang>`。
 
@@ -74,11 +77,13 @@ node _gate_run.mjs github-trending-masonry _gate.json
 ## 5. 关键设计与坑
 
 - **不要**给 `window.__ModuleLoader__.load` 加永久 guard。loader 在禁用/HMR 时会 invalidate factory 并重新执行 bundle；guard 会吞掉第二次注册，插件的侧边栏入口直接消失（0.1.0 上线后实际发生过，已修）。loader 的 `executedBundleUrls` 已防同一 URL 重放。
-- `webServer.register` **没有**准入控制：所有 handler 必须经过 `refusalOf` / `guard`（优先 `connection.requestRejection`，回退 loopback peer/Host + `sec-fetch-site`/`Origin`）；POST 必须 `application/json`（先 415 再读 body）；`/star`、`accountView` 用 `resolveToken({ env: false })`，环境变量 token 只做只读 enrichment。新增路由必须进 `tests/security.test.mjs` 的路由清单（当前 5 条）。
+- `webServer.register` **没有**准入控制：所有 handler 必须经过 `refusalOf` / `guard`（优先 `connection.requestRejection`，回退 loopback peer/Host + `sec-fetch-site`/`Origin`）；POST 必须 `application/json`（先 415 再读 body）；`/star`、`accountView` 用 `resolveToken({ env: false })`，环境变量 token 只做只读 enrichment。新增路由必须进 `tests/security.test.mjs` 的路由清单（当前 6 条）。
 - 面板文案在 `client.js` 的 ZH/EN 字典里；只改 `locale/*.json` 不会改变 UI。改标题/导航名要同时改 client.js 两个字典 + `locale/zh.json` + `locale/en.json`。
 - token 优先级：credentials 记录 → `state.json` 兜底 → `config.token` → 环境变量（仅 `env:true` 的只读路径）。别把 env token 接进写路径。
 - 缓存：TTL 默认 30 分钟 + localStorage 快照即时开屏；`refresh=1` 强制拉新。磁盘缓存带 `version` 常量，改结构要升 `CACHE_VERSION` 或兼容旧记录。
 - 卡片头图（2026-11-13 新增，未发版）：`extractReadme(raw, fullName)` 返回 `image`；`lib/readme.js` 的 `extractHeaderImage` 只扫 README 前 120 行，跳过 shields.io/badge 等徽章与 ≤100px 小图，相对路径解析到 `raw.githubusercontent.com/<full>/HEAD/`。`readme-cache.json` 的 `image` 字段为兼容式新增（未升 CACHE_VERSION）：旧条目缺 key 时 `ReadmeEnricher.upgradeImage` 首用补抓一次只回填 image，不动 intro/features/summaries/translations。卡片渲染在 meta 与 intro 之间，`client.js` `imageOf` 再校验一次 https。
+- 图片镜像（2026-11-17 新增）：`/feed` 的 `item.image` 仍是远程 URL（契约不变），`client.js` 按 `fullName` 拼 `/image?repo=` 走镜像、`data-remote` 兜底直连再挂隐藏（`degradeImage`）；卡片 React key 用 `owner/repo` 不带 index，排名变化不重挂载。镜像条目 key = `sha256(url).slice(0,32)`，同图不同 URL 会各存一份（README 换图链接即换 key，自动更新）。
+- 启动预热（2026-11-17 新增）：index.js 尾部 `effect` 定时器（unref+cleanup；`warmup:false` 关闭，`warmupDelayMs` 0..60000 默认 1500）→ `warmupFeed()`：`store.feedHint()`（`/feed` 时 `rememberFeed` 写入 `state.json.lastFeed`）决定榜单，`loadFeed(since, lang, false)` 尊重 TTL，再并发 4 预镜像 item.image+头像（上限 80）。**预热拼的头像 URL 必须与 handleImage 模板逐字节一致**（镜像 key 是 URL 哈希，改一处必改两处）。测试坑：其余 suite 的 boot 必须传 `warmup:false`（否则定时器真发网络请求）；warmup 测试的 fetch stub 必须带 `ok: true`（fetchTrending 检查 response.ok）。
 - README 的 Options 是公开契约：改 config key 或取值范围要同步 README 与 `index.js` 的 clamp。
 - 门禁的 `client-double-load` 警告是已知误报（探针会把 bundle 执行两次），不要为此加回 guard。
 - 开发机是 Windows + MSYS bash：`.git/index.lock` 偶发权限拒绝是暂时性的，重试即可；持续出现用 `diagnose-windows-sandbox-acl`。
@@ -93,7 +98,7 @@ node _gate_run.mjs github-trending-masonry _gate.json
 - [ ] 本机 gh 令牌缺 `workflow` scope：fork 无法 sync/推含 workflow 改动的分支；市场条目 PR 走「从 fork 旧 main 开分支只改 data/plugins」即可绕过（#14897 即如此）。
 - [ ] 没有 GitHub Release（只有 tag）；需要 tgz 附件时再补。
 - [ ] README「Options」里 env token 的说法与 0.1.2 只读规则容易误读，建议补一句「仅用于读取/限流」。
-- [ ] 测试只有 security；建议补 `normalizeSince` / `parseTrendingHtml` / `classify` / 缓存版本兼容的单测。
+- [ ] 建议补 `normalizeSince` / `parseTrendingHtml` / `classify` 的纯函数单测（缓存版本兼容已由 readme/warmup 用例部分覆盖）。
 - [ ] 当前 profile 是 symlink 开发安装；正式安装走 npm/市场，注意 `files` 白名单不含 `tests/`、`docs/`。
 
 ## 7. 新 session 开场清单

@@ -17,6 +17,8 @@ Browse GitHub Trending's daily, weekly and monthly boards in a masonry layout, w
 - **Instant tab switches**: once the visible board loads, the other two are readied in the background; reopening the panel paints the last content immediately, and the refresh button is there when you want live data.
 - **One-click star**: connect a GitHub account (Personal Access Token) and the star lands on your real account; without an account it is kept in "我的收藏" and survives restarts.
 - **Only what matters on a card**: the introduction, the project's README header art when it has one, the tech stack, the period tag and the category chips.
+- **Pictures don't re-download**: header art and avatars are mirrored to the plugin's data directory once and served with an immutable cache — refreshing the feed reuses the files on disk, so only a project whose README art actually changed costs a new download.
+- **Ready before you open it**: shortly after DSH starts, the plugin refreshes the board you last viewed and pre-downloads its images in the background — the first panel open shows real content at once instead of starting the download then.
 
 ## Install
 
@@ -54,6 +56,8 @@ config in the profile's `cordis.patch.yml`:
   name: dsh-github-trending-masonry
   config:
     ttlMinutes: 30        # how long a board is cached, 5..1440, default 30 min
+    warmup: true          # warm the last-viewed board shortly after DSH starts
+    warmupDelayMs: 1500   # that warm-up's startup delay, 0..60000
     summaries: true       # model-written intros; false = show translated README text
     summaryProvider: ''   # use a different model route
     summaryModel: ''      # use a different model

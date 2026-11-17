@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.3.0 - 2026-11-17
+
+- Card header art and owner avatars are now mirrored into the plugin's data
+  directory (`images/` + `index.json`) and served from a new `/image` route
+  with an ETag and a year-long immutable cache. Refreshing the feed reuses the
+  files already on disk instead of re-downloading every README banner.
+- The mirror is SSRF-guarded: public http(s) hosts only — no private or
+  loopback addresses, no credentials, capped redirects and size. SVG is left
+  remote (it renders fine directly).
+- If the mirror ever fails to fetch, cards fall back to the original remote
+  URL and then hide, so a blocked host can never blank a card silently.
+- Masonry cards keep stable keys (`owner/repo`), so a rank change no longer
+  remounts the card and force-reloads its image.
+- DSH startup now warms the panel before it is ever opened: an unref'd timer
+  refreshes the board you last viewed (honoring the cache TTL) and pre-mirrors
+  its header art and avatars, so the first open paints immediately. Opt out
+  with `warmup: false`; tune the delay with `warmupDelayMs`.
+- Fixed a mirror index race: concurrent first-time fetches each started from a
+  fresh empty index and the slower write silently dropped the faster one's
+  entry. Index and state loads are single-flight now.
+
 ## 0.2.1 - 2026-11-17
 
 - Waterfall packing: each card now joins the currently **shortest column**

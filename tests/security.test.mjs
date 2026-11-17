@@ -28,7 +28,7 @@ function boot(connection) {
     },
     logger: { info() {} },
   }
-  apply(ctx, { dataDir })
+  apply(ctx, { dataDir, warmup: false })
   const byPath = new Map(registered.map((definition) => [definition.path, definition]))
   return {
     byPath,
@@ -88,12 +88,12 @@ function jsonReq(payload, overrides = {}) {
   return request
 }
 
-test('all five panel routes are registered', () => {
+test('all six panel routes are registered', () => {
   const { byPath, dispose } = boot(undefined)
   try {
     assert.deepEqual(
       [...byPath.keys()].sort(),
-      [`${BASE}/account`, `${BASE}/feed`, `${BASE}/health`, `${BASE}/star`, `${BASE}/state`].sort(),
+      [`${BASE}/account`, `${BASE}/feed`, `${BASE}/health`, `${BASE}/image`, `${BASE}/star`, `${BASE}/state`].sort(),
     )
   } finally {
     dispose()
@@ -161,6 +161,19 @@ test('wrong method gets 405 with an Allow header', async () => {
     const result = await call(byPath.get(`${BASE}/star`), req({ method: 'GET' }))
     assert.equal(result.status, 405)
     assert.equal(result.headers.allow, 'POST')
+  } finally {
+    dispose()
+  }
+})
+
+test('the image route sits behind the same CSRF fence', async () => {
+  const { byPath, dispose } = boot(undefined)
+  try {
+    const result = await call(
+      byPath.get(`${BASE}/image`),
+      req({ method: 'GET', url: `${BASE}/image?repo=owner%2Frepo`, headers: { host: '127.0.0.1:51976', 'sec-fetch-site': 'cross-site' } }),
+    )
+    assert.equal(result.status, 403)
   } finally {
     dispose()
   }

@@ -4,12 +4,15 @@
  * Serves the Web panel:
  *   GET    /dsh-github-trending-masonry/feed?since=daily|weekly|monthly[&refresh=1]
  *   GET    /dsh-github-trending-masonry/state
+ *   GET    /dsh-github-trending-masonry/image?repo=owner/name | ?avatar=login
  *   POST   /dsh-github-trending-masonry/star
  *   POST   /dsh-github-trending-masonry/account
  *   DELETE /dsh-github-trending-masonry/account
  *
  * It also owns the durable trend cache (memory + disk), the local starred list,
- * and the optional GitHub account used for one-click starring.
+ * and the optional GitHub account used for one-click starring. On start it
+ * warms the board the panel last requested (plus its banner/avatar images)
+ * once, so the first panel open after boot paints from disk.
  */
 
 import os from 'node:os'
@@ -19,6 +22,7 @@ import { analyzeRepos } from './lib/analyze.js'
 import { FeedCache } from './lib/cache.js'
 import { ReadmeEnricher } from './lib/enrich.js'
 import { setStar, verifyToken } from './lib/github.js'
+import { ImageMirror } from './lib/image-mirror.js'
 import { PluginStore } from './lib/store.js'
 import { createSummarizer } from './lib/summarize.js'
 import { fetchTrending, normalizeSince } from './lib/trending.js'
@@ -27,8 +31,12 @@ import { createTranslator, normalizeLang } from './lib/translate.js'
 const BASE = '/dsh-github-trending-masonry'
 const CREDENTIAL_KEY = 'dsh-github-trending-masonry/github-token'
 const DEFAULT_TTL_MINUTES = 30
+const DEFAULT_WARMUP_DELAY_MS = 1500
+const WARMUP_IMAGE_LIMIT = 80
+const WARMUP_IMAGE_CONCURRENCY = 4
 const MAX_BODY_BYTES = 256 * 1024
 const FULL_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*\/[A-Za-z0-9][A-Za-z0-9._-]*$/
+const AVATAR_LOGIN_RE = /^[A-Za-z0-9][A-Za-z0-9-]{0,38}$/
 
 export const inject = ['webServer']
 
@@ -200,9 +208,12 @@ function errorMessage(error) {
 
 export function apply(ctx, config = {}) {
   const ttlMinutes = clampInt(config.ttlMinutes, DEFAULT_TTL_MINUTES, 5, 1440)
+  const warmupEnabled = config.warmup !== false
+  const warmupDelayMs = clampInt(config.warmupDelayMs, DEFAULT_WARMUP_DELAY_MS, 0, 60000)
   const dataDir = resolveDataDir(config)
   const cache = new FeedCache(dataDir, ttlMinutes * 60 * 1000)
   const enricher = new ReadmeEnricher(dataDir)
+  const images = new ImageMirror(dataDir)
   const translate = createTranslator(ctx, fallbackFetcher)
   const summarizer = createSummarizer(ctx, {
     enabled: config.summaries !== false,
@@ -213,6 +224,7 @@ export function apply(ctx, config = {}) {
   })
   const store = new PluginStore(dataDir)
   const fixedToken = typeof config.token === 'string' && config.token.trim() ? config.token.trim() : null
+  let lastWarmup = null
 
   const effect = (setup) => {
     if (typeof ctx.effect === 'function') {
@@ -347,11 +359,61 @@ export function apply(ctx, config = {}) {
     }
   }
 
+  /**
+   * Startup warmup: the first panel open after boot should not pay for a
+   * cold scrape. A little after the Host starts, the board the panel last
+   * requested is refreshed through the normal TTL path (a fresh cache is a
+   * cheap no-op) and its banner/avatar images are pre-mirrored, so the first
+   * open is served entirely from disk.
+   */
+  async function warmupFeed() {
+    const startedAt = Date.now()
+    try {
+      const hint = await store.feedHint()
+      const since = normalizeSince(hint && hint.since)
+      const lang = normalizeLang(hint && hint.lang)
+      const result = await loadFeed(since, lang, false)
+      const urls = []
+      for (const item of result.items) {
+        if (typeof item.image === 'string' && /^https?:\/\//i.test(item.image)) urls.push(item.image)
+        if (AVATAR_LOGIN_RE.test(String(item.owner ?? ''))) urls.push(`https://github.com/${encodeURIComponent(item.owner)}.png?size=96`)
+      }
+      const pending = [...new Set(urls)].slice(0, WARMUP_IMAGE_LIMIT)
+      let mirrored = 0
+      let failures = 0
+      const drain = async () => {
+        for (let url = pending.shift(); url !== undefined; url = pending.shift()) {
+          try {
+            await images.get(url)
+            mirrored += 1
+          } catch {
+            failures += 1
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: WARMUP_IMAGE_CONCURRENCY }, drain))
+      lastWarmup = {
+        at: new Date().toISOString(),
+        since,
+        lang,
+        cache: result.cacheState,
+        repos: result.items.length,
+        mirrored,
+        failures,
+        ms: Date.now() - startedAt,
+      }
+      log(ctx, `warmup done (${since}/${lang}, cache=${result.cacheState}, ${result.items.length} repos, ${mirrored} images${failures ? `, ${failures} failed` : ''}, ${lastWarmup.ms}ms)`)
+    } catch (error) {
+      log(ctx, `warmup skipped: ${errorMessage(error)}`)
+    }
+  }
+
   async function handleFeed(req, res) {
     if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
     const query = queryOf(req)
     const since = normalizeSince(query.since)
     const lang = normalizeLang(query.lang)
+    void store.rememberFeed(since, lang).catch(() => {})
     const forceRefresh = query.refresh === '1' || query.refresh === 'true'
     const result = await loadFeed(since, lang, forceRefresh)
     const payload = {
@@ -371,14 +433,86 @@ export function apply(ctx, config = {}) {
     sendJson(res, 200, await statePayload())
   }
 
+  /**
+   * GET /image?repo=owner/name — the mirrored README header art of one
+   * repository; GET /image?avatar=login — a mirrored owner avatar.
+   *
+   * Bytes come from the local mirror with immutable cache headers, so a feed
+   * refresh never re-downloads an unchanged picture: the project keeps its
+   * image URL, the URL keeps its mirror file, the browser keeps its cache
+   * entry. A first request downloads once; a download failure answers 502
+   * and the panel falls back to loading the original remote URL itself.
+   */
+  async function handleImage(req, res) {
+    if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
+    const query = queryOf(req)
+    let sourceUrl = ''
+    if (query.repo) {
+      const fullName = String(query.repo).trim()
+      if (!FULL_NAME_RE.test(fullName)) {
+        sendError(res, 400, 'invalid repository full name', 'invalid_repo')
+        return
+      }
+      const entries = await enricher.load()
+      const image = entries[fullName] && entries[fullName].image
+      if (typeof image !== 'string' || !image.trim()) {
+        sendError(res, 404, 'this repository has no mirrored header image', 'no_image')
+        return
+      }
+      sourceUrl = image.trim()
+    } else if (query.avatar) {
+      const login = String(query.avatar).trim()
+      if (!AVATAR_LOGIN_RE.test(login)) {
+        sendError(res, 400, 'invalid GitHub account name', 'invalid_login')
+        return
+      }
+      sourceUrl = `https://github.com/${encodeURIComponent(login)}.png?size=96`
+    } else {
+      sendError(res, 400, 'a repo or avatar query parameter is required', 'bad_request')
+      return
+    }
+    let entry
+    try {
+      entry = await images.get(sourceUrl)
+    } catch (error) {
+      sendError(res, 502, `image mirror failed: ${errorMessage(error)}`, 'image_fetch')
+      return
+    }
+    const etag = `"${entry.hash}"`
+    if (String(req.headers['if-none-match'] ?? '') === etag) {
+      res.statusCode = 304
+      res.setHeader('etag', etag)
+      res.setHeader('cache-control', 'public, max-age=31536000, immutable')
+      res.end()
+      return
+    }
+    let bytes
+    try {
+      bytes = await images.read(entry)
+    } catch (error) {
+      sendError(res, 502, `image read failed: ${errorMessage(error)}`, 'image_read')
+      return
+    }
+    res.statusCode = 200
+    res.setHeader('content-type', entry.contentType)
+    res.setHeader('cache-control', 'public, max-age=31536000, immutable')
+    res.setHeader('etag', etag)
+    res.setHeader('last-modified', new Date(Number(entry.at) || Date.now()).toUTCString())
+    res.setHeader('x-content-type-options', 'nosniff')
+    res.setHeader('content-security-policy', "default-src 'none'; sandbox")
+    res.setHeader('content-length', String(bytes.length))
+    res.end(bytes)
+  }
+
   async function handleHealth(req, res) {
     if (req.method !== 'GET') return methodNotAllowed(res, 'GET')
     sendJson(res, 200, {
       ok: true,
-      version: '1.3.0',
+      version: '0.3.0',
       dataDir,
       ttlMinutes,
       summaries: summarizer.health(),
+      warmup: lastWarmup,
     })
   }
 
@@ -514,6 +648,7 @@ export function apply(ctx, config = {}) {
     route(`${BASE}/feed`, handleFeed),
     route(`${BASE}/state`, handleState),
     route(`${BASE}/health`, handleHealth),
+    route(`${BASE}/image`, handleImage),
     route(`${BASE}/star`, handleStar),
     route(`${BASE}/account`, (req, res) => (req.method === 'DELETE' ? handleDisconnect(req, res) : handleConnect(req, res))),
   ]
@@ -532,5 +667,15 @@ export function apply(ctx, config = {}) {
     )
   }
 
-  log(ctx, `ready (data=${dataDir}, ttl=${ttlMinutes}m, token=${fixedToken ? 'config' : 'auto'})`)
+  if (warmupEnabled) {
+    effect(() => {
+      const timer = setTimeout(() => {
+        void warmupFeed()
+      }, warmupDelayMs)
+      if (typeof timer.unref === 'function') timer.unref()
+      return () => clearTimeout(timer)
+    })
+  }
+
+  log(ctx, `ready (data=${dataDir}, ttl=${ttlMinutes}m, warmup=${warmupEnabled ? `${warmupDelayMs}ms` : 'off'}, token=${fixedToken ? 'config' : 'auto'})`)
 }
