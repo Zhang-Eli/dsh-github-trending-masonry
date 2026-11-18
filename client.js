@@ -38,9 +38,9 @@ window.__ModuleLoader__.load({
     const MAX_FEATURES = 4
     const TOKEN_URL = 'https://github.com/settings/tokens/new?scopes=public_repo&description=DSH%20Trending%20Masonry'
     // Author / feedback links shown at the foot of the panel.
-    const REPO_URL = 'https://github.com/Zhang-Eli/dsh-github-trending-masonry'
+    const REPO_URL = 'https://github.com/wzvx/dsh-github-trending-masonry'
     const ISSUES_URL = REPO_URL + '/issues'
-    const AUTHOR_NAME = 'Zhang-Eli'
+    const AUTHOR_NAME = 'wzvx'
     const AUTHOR_URL = 'https://github.com/' + AUTHOR_NAME
 
     /** Filled in apply(); the slot components are rendered by the shell, not by us. */
