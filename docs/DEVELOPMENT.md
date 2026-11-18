@@ -8,7 +8,7 @@
 | 项 | 值 |
 | --- | --- |
 | 仓库 | `C:\Users\Administrator\Documents\dsh-github-trending\dsh-github-trending-masonry`（分支 master；外层目录 `dsh-github-trending` 只是本机存放处，真正的插件仓库是内层这个） |
-| 远端 | https://github.com/Zhang-Eli/dsh-github-trending-masonry |
+| 远端 | https://github.com/wzvx/dsh-github-trending-masonry（2026-11-18 账号由 Zhang-Eli 改名为 wzvx） |
 | HEAD | `3b1c972 Release 0.2.0: flat/elevated UI styles, README header art, refreshed marketplace screenshots`（已同步 origin/master；本机已把全库 CRLF 噪音清理回 LF，提交只含真实改动） |
 | tag | `v0.1.0`…`v0.2.0`（没有 GitHub Release） |
 | npm | `dsh-github-trending-masonry@0.2.0` 为 latest；`dist.shasum ebf7d075c5c5d3e9dbfee7793095fdbb23dcdfbc`，unpacked ~198.8 kB / 20 files |

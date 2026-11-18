@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1 - 2026-11-18
+
+- The owner renamed their GitHub account to `wzvx`. The panel footer
+  (author name, avatar, repo and feedback links) and the npm metadata
+  (`repository`, `homepage`, `bugs`) now all point at
+  `github.com/wzvx/dsh-github-trending-masonry`, so the marketplace keeps
+  the fast registry install path after the rename.
+- `.local/` (runtime image mirror and state written by the plugin host) is
+  now gitignored.
+
 ## 0.3.0 - 2026-11-17
 
 - Card header art and owner avatars are now mirrored into the plugin's data
