@@ -4,9 +4,9 @@
 
 用瀑布流浏览 GitHub Trending 的 日/周/月 榜单，支持一键Star并同步到GitHub。
 
-![DSH 侧栏中的 GitHub Trending 面板（扁平风格）](assets/screenshot-1.png)
+![DSH 侧栏中的 GitHub Trending 面板（浅色主题 · 悬浮 Material 风格）](assets/screenshot-1.png)
 
-![悬浮风格——卡片与控件以 Material 阴影浮于背景之上](assets/screenshot-2.png)
+![深色主题 · 扁平风格——卡片以细边框贴合背景](assets/screenshot-2.png)
 
 ## 功能
 

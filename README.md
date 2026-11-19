@@ -4,9 +4,9 @@
 
 Browse GitHub Trending's daily, weekly and monthly boards in a masonry layout, with one-click starring that syncs to GitHub.
 
-![The GitHub Trending panel in the DSH sidebar (flat style)](assets/screenshot-1.png)
+![The GitHub Trending panel in the DSH sidebar — light theme with the elevated Material style](assets/screenshot-1.png)
 
-![The same panel in the elevated Material style — cards and controls float on layered shadows](assets/screenshot-2.png)
+![The same panel in dark theme, flat style — cards sit flush on the background with hairline borders](assets/screenshot-2.png)
 
 ## What it does
 
