@@ -722,13 +722,16 @@ window.__ModuleLoader__.load({
 
     /** Small speech-bubble icon matching the footer's "feedback" link. */
     function FeedbackIcon(props) {
-      const size = (props && props.size) || 13
+      // The bubble path only spans ~x 2.9–13.2 / y 3.5–13.2, so the viewBox is
+      // cropped to 0 0 16 16 (not 24) to make the glyph fill the box and read at
+      // a normal size next to the 12px footer text.
+      const size = (props && props.size) || 14
       return h(
         'svg',
         {
           width: size,
           height: size,
-          viewBox: '0 0 24 24',
+          viewBox: '0 0 16 16',
           fill: 'none',
           stroke: 'currentColor',
           strokeWidth: 1.6,
@@ -1587,7 +1590,7 @@ window.__ModuleLoader__.load({
             title: t('feedback') + ' · ' + ISSUES_URL,
             'aria-label': t('feedback') + ' · ' + ISSUES_URL,
           },
-          h(FeedbackIcon, { size: 13 }),
+          h(FeedbackIcon, { size: 14 }),
           t('feedback'),
         ),
         h(
