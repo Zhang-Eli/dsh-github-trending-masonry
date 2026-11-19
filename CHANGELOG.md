@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2 - 2026-11-19
+
+- README screenshots refreshed from the current UI: the light-theme
+  panel in the elevated Material style, the dark-theme panel in flat style.
+  Captions in both READMEs now describe the pair. No code changes.
+
 ## 0.3.1 - 2026-11-18
 
 - The owner renamed their GitHub account to `wzvx`. The panel footer
